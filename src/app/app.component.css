@@ -1,0 +1,184 @@
+.game {
+  max-width: 420px;
+  margin: 40px auto;
+  font-family: system-ui, -apple-system, sans-serif;
+  text-align: center;
+  padding: 0 16px;
+}
+
+h1 {
+  margin-bottom: 4px;
+  letter-spacing: 4px;
+}
+
+.tagline {
+  color: #666;
+  font-size: 0.85rem;
+  margin-bottom: 24px;
+  line-height: 1.4;
+}
+
+.board {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 20px;
+}
+
+.row {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+}
+
+.tile {
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 1.4rem;
+  border: 2px solid #d3d6da;
+  text-transform: uppercase;
+  border-radius: 4px;
+  transition: background-color 0.3s, border-color 0.3s;
+}
+
+.tile.pending {
+  border-color: #878a8c;
+  background: white;
+  color: #333;
+}
+
+.tile.empty {
+  border-color: #e3e3e3;
+  background: #f5f5f5;
+}
+
+.tile.correct {
+  background: #6aaa64;
+  border-color: #6aaa64;
+  color: white;
+}
+
+.tile.present {
+  background: #c9b458;
+  border-color: #c9b458;
+  color: white;
+}
+
+.tile.absent {
+  background: #787c7e;
+  border-color: #787c7e;
+  color: white;
+}
+
+.input-area {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+
+input {
+  padding: 8px;
+  font-size: 1rem;
+  text-transform: uppercase;
+  width: 180px;
+  border: 2px solid #ccc;
+  border-radius: 4px;
+}
+
+button {
+  padding: 8px 16px;
+  font-size: 1rem;
+  border: none;
+  background: #333;
+  color: white;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #555;
+}
+
+.errorMessage {
+  color: #b00;
+  font-size: 0.9rem;
+}
+
+.correctMessage {
+  color: #2e7d32;
+  font-size: 0.9rem;
+}
+
+.game-over {
+  margin-top: 16px;
+}
+
+.result {
+  font-weight: bold;
+}
+
+.result.won {
+  color: #2e7d32;
+}
+
+.keyboard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 16px 0;
+}
+
+.keyboard-row {
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+}
+
+.key {
+  min-width: 30px;
+  height: 44px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 4px;
+  background: #d3d6da;
+  color: #1a1a1a;
+  font-weight: bold;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.key:hover {
+  background: #bbc0c4;
+}
+
+.key.wide {
+  min-width: 52px;
+  font-size: 0.75rem;
+}
+
+.key.correct {
+  background: #6aaa64;
+  color: white;
+}
+
+.key.present {
+  background: #c9b458;
+  color: white;
+}
+
+.key.absent {
+  background: #787c7e;
+  color: white;
+}
+
+footer {
+  margin-top: 20px;
+  color: #999;
+  font-size: 0.8rem;
+}

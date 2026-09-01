@@ -1,0 +1,60 @@
+<div class="game">
+  <header>
+    <h1>LAGLE</h1>
+    <p class="tagline">
+      The one-turn-lag word game. You never see feedback for the guess you
+      just made — only for the one before it.
+    </p>
+  </header>
+
+  <div class="board">
+    <div class="row" *ngFor="let row of rows">
+      <div
+        class="tile"
+        *ngFor="let letter of row.word.split(''); let j = index"
+        [ngClass]="row.feedback ? row.feedback[j] : 'pending'"
+      >
+        {{ letter }}
+      </div>
+    </div>
+
+    <div class="row placeholder" *ngIf="!gameOver">
+      <div class="tile empty" *ngFor="let i of [0, 1, 2, 3, 4]"></div>
+    </div>
+  </div>
+
+  <div class="input-area" *ngIf="!gameOver">
+    <input
+      type="text"
+      [ngModel]="currentInput"
+      (ngModelChange)="onInputChange($event)"
+      (keyup.enter)="submitGuess()"
+      maxlength="5"
+      placeholder="5-letter word"
+      inputmode="none"
+      autofocus
+    />
+    <button (click)="submitGuess()">Guess</button>
+  </div>
+
+  <p class="errorMessage" *ngIf="message && !isCorrect">{{ message }}</p>
+
+  <p class="correctMessage" *ngIf="message && isCorrect">{{ message }}</p>
+
+  <div class="keyboard">
+    <div class="keyboard-row" *ngFor="let keyRow of keyboardRows">
+      <button
+        *ngFor="let key of keyRow"
+        class="key"
+        [class.wide]="key === 'ENTER' || key === 'BACK'"
+        [ngClass]="keyStatus[key]"
+        (click)="onKeyClick(key)">
+      {{ key === 'BACK' ? '⌫' : key }}
+      </button>
+    </div>
+  </div>
+
+  <footer>
+    <p>{{ rows.length }} / {{ maxGuesses }} guesses used</p>
+  </footer>
+</div>
