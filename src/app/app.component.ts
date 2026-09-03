@@ -61,6 +61,7 @@ export function isSavedGameState(value: unknown): value is {
   won: boolean;
   gameOver: boolean;
   message: string;
+  target: string;
 } {
   if (!value || typeof value !== 'object') return false;
   const state = value as Record<string, unknown>;
@@ -76,7 +77,9 @@ export function isSavedGameState(value: unknown): value is {
     }) &&
     typeof state['won'] === 'boolean' &&
     typeof state['gameOver'] === 'boolean' &&
-    typeof state['message'] === 'string';
+    typeof state['message'] === 'string' &&
+    typeof state['target'] === 'string' &&
+    /^[A-Z]{5}$/.test(state['target']);
 }
 
 // Ranks how "good" a status is, so a key already marked correct
@@ -104,6 +107,7 @@ export class AppComponent {
   ];
 
   currentInput = '';
+  target = '';
   rows: GuessRow[] = [];
   message = '';
   messageType: 'error' | 'info' | 'success' = 'info';
@@ -111,6 +115,7 @@ export class AppComponent {
   won = false;
   isCorrect = false;
   isSubmitting = false;
+  isLoading = true;
 
   // Best known status per letter, only updated once a guess is revealed.
   keyStatus: Record<string, LetterState> = {};
@@ -119,7 +124,8 @@ export class AppComponent {
     this.newGame();
   }
 
-  newGame(): void {
+  async newGame(): Promise<void> {
+    this.isLoading = true;
     const storage = this.getStorage();
     const lastPlayed = storage?.getItem('LAGLE_LAST_PLAYED_DATE');
     const today = new Date().toISOString().slice(0, 10);
@@ -136,6 +142,7 @@ export class AppComponent {
             this.message = parsedState.message;
             this.messageType = parsedState.won ? 'success' : parsedState.gameOver ? 'error' : 'info';
             this.isCorrect = this.won;
+            this.target = parsedState.target;
             this.currentInput = '';
             this.keyStatus = {};
             this.rows.forEach((row) => {
@@ -154,10 +161,19 @@ export class AppComponent {
     this.rows = [];
     this.message = '';
     this.messageType = 'info';
+
+    try {
+      this.target = await getWordOfDay();
+    } catch {
+      this.target = '';
+      this.message = 'Unable to load today\'s word. Please refresh and try again.';
+      this.messageType = 'error';
+    }
     this.gameOver = false;
     this.won = false;
     this.isCorrect = false;
     this.keyStatus = {};
+    this.isLoading = false;
   }
 
   onInputChange(value: string): void {
@@ -169,7 +185,7 @@ export class AppComponent {
 
   // Wired up to the on-screen keyboard buttons.
   onKeyClick(key: string): void {
-    if (this.gameOver || this.isSubmitting) {
+    if (this.gameOver || this.isSubmitting || this.isLoading || !this.target) {
       return;
     }
     if (key === 'ENTER') {
@@ -230,11 +246,11 @@ export class AppComponent {
       }
     }
 
-    this.isCorrect = verification.is_correct;
+    this.isCorrect = guess === this.target;
 
     // A correct guess still confirms itself immediately -
     // otherwise you'd never know you'd actually won.
-    const apiFeedback = feedbackFromCharacterInfo(verification.character_info);
+    const apiFeedback = computeFeedback(guess, this.target);
     const feedback = this.isCorrect
       ? Array.from({ length: 5 }, () => 'correct' as LetterState)
       : null;
@@ -251,29 +267,16 @@ export class AppComponent {
     } else if (this.rows.length >= this.maxGuesses) {
       // Game's over either way, so reveal the final pending guess too.
       const lastRow = this.rows[this.rows.length - 1];
-      const feedback = lastRow.pendingFeedback;
-      if (feedback) {
-        lastRow.feedback = feedback;
-        this.updateKeyStatus(lastRow.word, feedback);
-      }
+      lastRow.feedback = lastRow.pendingFeedback || computeFeedback(lastRow.word, this.target);
+      this.updateKeyStatus(lastRow.word, lastRow.feedback);
       this.gameOver = true;
-      this.message = 'Out of guesses. Loading the word of the day...';
+      this.message = `Out of guesses. The word was ${this.target}.`;
       this.messageType = 'error';
-      await this.revealAnswer();
     }
 
     this.currentInput = '';
     this.saveGameState();
     this.isSubmitting = false;
-  }
-
-  private async revealAnswer(): Promise<void> {
-    try {
-      const answer = await getWordOfDay();
-      this.message = `Out of guesses. The word was ${answer}.`;
-    } catch {
-      this.message = 'Out of guesses. The word of the day could not be loaded.';
-    }
   }
 
   private saveGameState(): void {
@@ -283,7 +286,7 @@ export class AppComponent {
       storage.setItem('LAGLE_LAST_PLAYED_DATE', new Date().toISOString().slice(0, 10));
       storage.setItem('LAGLE_GAME_STATE', JSON.stringify({
         rows: this.rows, won: this.won, gameOver: this.gameOver,
-        message: this.message
+        message: this.message, target: this.target
       }));
     } catch {
       this.message = 'Game progress could not be saved on this device.';

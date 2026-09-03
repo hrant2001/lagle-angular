@@ -25,6 +25,12 @@ describe('Lagle game rules', () => {
     storage = new MemoryStorage();
     vi.stubGlobal('localStorage', storage);
     vi.stubGlobal('fetch', vi.fn((input: string, init?: RequestInit) => {
+      if (input === 'https://wordle-api-kappa.vercel.app/answer') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ word: 'OTHER' }),
+        });
+      }
       if (init?.method === 'POST') {
         return Promise.resolve({
           ok: true,
@@ -54,6 +60,7 @@ describe('Lagle game rules', () => {
 
   it('reveals the previous guess only when the next guess is submitted', async () => {
     const game = new AppComponent();
+    await game.newGame();
     game.currentInput = 'WHICH';
 
     await game.submitGuess();
@@ -68,6 +75,7 @@ describe('Lagle game rules', () => {
 
   it('persists an active valid game after each guess', async () => {
     const game = new AppComponent();
+    await game.newGame();
     game.currentInput = 'WHICH';
 
     await game.submitGuess();
@@ -93,6 +101,7 @@ describe('Lagle game rules', () => {
       won: false,
       gameOver: false,
       message: '',
+      target: 'OTHER',
     })).toBe(true);
     expect(isSavedGameState({ rows: [{ word: 'BAD', feedback: null }] })).toBe(false);
   });
