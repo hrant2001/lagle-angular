@@ -5,7 +5,7 @@ import {
   computeFeedback,
   isSavedGameState,
 } from './app.component';
-import { getWordOfDay, verifyGuess } from './word-list';
+import { verifyGuess } from './word-list';
 
 class MemoryStorage implements Storage {
   private values = new Map<string, string>();
@@ -25,9 +25,6 @@ describe('Lagle game rules', () => {
     storage = new MemoryStorage();
     vi.stubGlobal('localStorage', storage);
     vi.stubGlobal('fetch', vi.fn((input: string, init?: RequestInit) => {
-      if (input.endsWith('/answer')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ word: 'OTHER' }) });
-      }
       if (init?.method === 'POST') {
         return Promise.resolve({
           ok: true,
@@ -57,8 +54,6 @@ describe('Lagle game rules', () => {
 
   it('reveals the previous guess only when the next guess is submitted', async () => {
     const game = new AppComponent();
-    await game.newGame();
-    game.target = 'OTHER';
     game.currentInput = 'WHICH';
 
     await game.submitGuess();
@@ -73,8 +68,6 @@ describe('Lagle game rules', () => {
 
   it('persists an active valid game after each guess', async () => {
     const game = new AppComponent();
-    await game.newGame();
-    game.target = 'OTHER';
     game.currentInput = 'WHICH';
 
     await game.submitGuess();
@@ -89,14 +82,9 @@ describe('Lagle game rules', () => {
     storage.setItem('LAGLE_GAME_STATE', '{not-json');
 
     const game = new AppComponent();
-    await game.newGame();
 
     expect(game.rows).toEqual([]);
     expect(storage.getItem('LAGLE_GAME_STATE')).toBeNull();
-  });
-
-  it('selects the same target for the same UTC day and wraps before the start date', () => {
-    return expect(getWordOfDay()).resolves.toBe('OTHER');
   });
 
   it('validates the shape of saved state', () => {
@@ -105,7 +93,6 @@ describe('Lagle game rules', () => {
       won: false,
       gameOver: false,
       message: '',
-      target: 'OTHER',
     })).toBe(true);
     expect(isSavedGameState({ rows: [{ word: 'BAD', feedback: null }] })).toBe(false);
   });

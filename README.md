@@ -20,7 +20,6 @@ npm test
 
 ## How it works
 
-- The word of the day is loaded from `GET https://wordle-api-kappa.vercel.app/answer`.
 - Guesses are verified with `POST https://wordle-api-kappa.vercel.app/{guess}`
   without a request body. The API response supplies validity, correctness, and
   per-character scoring.
@@ -40,5 +39,5 @@ npm test
 - `src/app/app.component.ts` — game state and the delayed-feedback logic
 - `src/app/app.component.html` — board and input UI
 - `src/app/app.component.css` — styling
-- `src/app/word-list.ts` — API client for the answer and guess endpoints
+- `src/app/word-list.ts` — API client for guess verification
 - `src/app/app.component.spec.ts` — unit tests for game rules and persistence

@@ -7,10 +7,6 @@
     </p>
   </header>
 
-  <p class="game-message" role="status" aria-live="polite" *ngIf="isLoading">
-    Loading today's word...
-  </p>
-
   <div class="board" role="grid" aria-label="Guess board">
     <div class="row" *ngFor="let row of rows">
       <div
@@ -42,7 +38,7 @@
       inputmode="text"
       autocomplete="off"
       aria-describedby="game-message"
-      [disabled]="isLoading || isSubmitting"
+      [disabled]="isSubmitting"
       autofocus
     />
     <button type="button" (click)="submitGuess()" [disabled]="isSubmitting">
