@@ -20,31 +20,23 @@
       </div>
     </div>
 
-    <div class="row placeholder" *ngIf="!gameOver">
-      <div class="tile empty" *ngFor="let i of [0, 1, 2, 3, 4]"></div>
-    </div>
-  </div>
-
-  <div class="input-area" *ngIf="!gameOver">
-    <label class="visually-hidden" for="guess-input">Enter a five-letter guess</label>
-    <input
+    <div
       #guessInput
-      id="guess-input"
-      type="text"
-      [ngModel]="currentInput"
-      (ngModelChange)="onInputChange($event)"
-      (keyup.enter)="submitGuess()"
-      maxlength="5"
-      placeholder="5-letter word"
-      inputmode="text"
-      autocomplete="off"
+      class="row guess-input-row"
+      role="textbox"
+      aria-label="Enter a five-letter guess"
       aria-describedby="game-message"
-      [disabled]="isSubmitting"
-      autofocus
-    />
-    <button type="button" (click)="submitGuess()" [disabled]="isSubmitting">
-      {{ isSubmitting ? 'Checking...' : 'Guess' }}
-    </button>
+      tabindex="0"
+      (click)="onInputRowClick()">
+      <div
+        *ngFor="let cell of [0, 1, 2, 3, 4]"
+        class="tile input-cell"
+        [ngClass]="isCorrect ? 'correct' : currentFeedback?.[cell] || 'pending'"
+        role="gridcell"
+        [attr.aria-label]="currentInput[cell] || 'Empty letter ' + (cell + 1)">
+        {{ currentInput[cell] || '' }}
+      </div>
+    </div>
   </div>
 
   <p
@@ -75,6 +67,6 @@
   </div>
 
   <footer>
-    <p>{{ rows.length }} / {{ maxGuesses }} guesses used</p>
+    <p>{{ rows.length + (gameOver ? 1 : 0) }} / {{ maxGuesses }} guesses used</p>
   </footer>
 </div>

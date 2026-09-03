@@ -1,4 +1,4 @@
-import { Component, ElementRef, ViewChild } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, HostListener, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { getWordOfDay, verifyGuess } from './word-list';
@@ -62,6 +62,8 @@ export function isSavedGameState(value: unknown): value is {
   gameOver: boolean;
   message: string;
   target: string;
+  currentInput?: string;
+  currentFeedback?: LetterState[] | null;
 } {
   if (!value || typeof value !== 'object') return false;
   const state = value as Record<string, unknown>;
@@ -79,7 +81,10 @@ export function isSavedGameState(value: unknown): value is {
     typeof state['gameOver'] === 'boolean' &&
     typeof state['message'] === 'string' &&
     typeof state['target'] === 'string' &&
-    /^[A-Z]{5}$/.test(state['target']);
+    /^[A-Z]{5}$/.test(state['target']) &&
+    (state['currentInput'] === undefined || /^[A-Z]{0,5}$/.test(state['currentInput'] as string)) &&
+    (state['currentFeedback'] === undefined || isValidFeedback(state['currentFeedback']));
+    
 }
 
 // Ranks how "good" a status is, so a key already marked correct
@@ -97,8 +102,8 @@ const STATUS_RANK: Record<LetterState, number> = {
   templateUrl: './app.component.html',
   styleUrl: './app.component.css',
 })
-export class AppComponent {
-  @ViewChild('guessInput') private guessInput?: ElementRef<HTMLInputElement>;
+export class AppComponent implements AfterViewInit {
+  @ViewChild('guessInput') private guessInput?: ElementRef<HTMLElement>;
 
   readonly maxGuesses = 8;
 
@@ -109,6 +114,7 @@ export class AppComponent {
   ];
 
   currentInput = '';
+  currentFeedback: LetterState[] | null = null;
   target = '';
   rows: GuessRow[] = [];
   message = '';
@@ -124,6 +130,10 @@ export class AppComponent {
 
   constructor() {
     this.newGame();
+  }
+
+  ngAfterViewInit(): void {
+    this.focusInput();
   }
 
   async newGame(): Promise<void> {
@@ -145,11 +155,13 @@ export class AppComponent {
             this.messageType = parsedState.won ? 'success' : parsedState.gameOver ? 'error' : 'info';
             this.isCorrect = this.won;
             this.target = parsedState.target;
-            this.currentInput = '';
+            this.currentInput = parsedState.currentInput || '';
+            this.currentFeedback = parsedState.currentFeedback || null;
             this.keyStatus = {};
             this.rows.forEach((row) => {
               if (row.feedback) this.updateKeyStatus(row.word, row.feedback);
             });
+            this.isLoading = false;
             return;
           }
           storage?.removeItem('LAGLE_GAME_STATE');
@@ -160,6 +172,7 @@ export class AppComponent {
     }
 
     this.currentInput = '';
+    this.currentFeedback = null;
     this.rows = [];
     this.message = '';
     this.messageType = 'info';
@@ -178,16 +191,42 @@ export class AppComponent {
     this.isLoading = false;
   }
 
-  onInputChange(value: string): void {
-    this.currentInput = value
-      .toUpperCase()
-      .replace(/[^A-Z]/g, '')
-      .slice(0, 5);
+  onInputRowClick(): void {
+    this.focusInput();
+  }
+
+  @HostListener('document:keydown', ['$event'])
+  onDocumentKeydown(event: KeyboardEvent): void {
+    this.onInputKeydown(event);
+  }
+
+  onInputKeydown(event: KeyboardEvent): void {
+    if (this.gameOver || this.isSubmitting) return;
+
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      this.submitGuess();
+      return;
+    }
+
+    if (event.key === 'Backspace') {
+      event.preventDefault();
+      if (this.currentInput.length > 0) {
+        this.currentInput = this.currentInput.slice(0, -1);
+      }
+      this.focusInput();
+      return;
+    }
+
+    if (/^[a-zA-Z]$/.test(event.key) && this.currentInput.length < 5) {
+      event.preventDefault();
+      this.currentInput += event.key.toUpperCase();
+    }
   }
 
   // Wired up to the on-screen keyboard buttons.
   onKeyClick(key: string): void {
-    if (this.gameOver || this.isSubmitting || this.isLoading || !this.target) {
+    if (this.gameOver || this.isSubmitting) {
       return;
     }
     if (key === 'ENTER') {
@@ -195,16 +234,26 @@ export class AppComponent {
       return;
     }
     if (key === 'BACK') {
-      this.currentInput = this.currentInput.slice(0, -1);
+      if (this.currentInput.length > 0) {
+        this.currentInput = this.currentInput.slice(0, -1);
+      }
+      this.focusInput();
       return;
     }
     if (this.currentInput.length < 5) {
       this.currentInput += key;
+      this.focusInput();
     }
   }
 
   async submitGuess(): Promise<void> {
     if (this.gameOver || this.isSubmitting) {
+      return;
+    }
+
+    if (!this.target || this.isLoading) {
+      this.message = 'The game is still loading. Please try again.';
+      this.messageType = 'error';
       return;
     }
 
@@ -259,9 +308,13 @@ export class AppComponent {
     const feedback = this.isCorrect
       ? Array.from({ length: 5 }, () => 'correct' as LetterState)
       : null;
-    this.rows.push({ word: guess, feedback, pendingFeedback: apiFeedback || undefined });
-    if (feedback) {
-      this.updateKeyStatus(guess, feedback);
+    if (this.isCorrect) {
+      this.currentInput = guess;
+      if (feedback) {
+        this.updateKeyStatus(guess, feedback);
+      }
+    } else {
+      this.rows.push({ word: guess, feedback, pendingFeedback: apiFeedback || undefined });
     }
 
     if (this.isCorrect) {
@@ -274,12 +327,18 @@ export class AppComponent {
       const lastRow = this.rows[this.rows.length - 1];
       lastRow.feedback = lastRow.pendingFeedback || computeFeedback(lastRow.word, this.target);
       this.updateKeyStatus(lastRow.word, lastRow.feedback);
+      this.rows.pop();
+      this.currentInput = lastRow.word;
+      this.currentFeedback = lastRow.feedback;
       this.gameOver = true;
       this.message = `Out of guesses. The word was ${this.target}.`;
       this.messageType = 'error';
     }
 
-    this.currentInput = '';
+    if (!this.isCorrect && !this.gameOver) {
+      this.currentInput = '';
+      this.currentFeedback = null;
+    }
     this.saveGameState();
     this.isSubmitting = false;
     this.focusInput();
@@ -298,7 +357,8 @@ export class AppComponent {
       storage.setItem('LAGLE_LAST_PLAYED_DATE', new Date().toISOString().slice(0, 10));
       storage.setItem('LAGLE_GAME_STATE', JSON.stringify({
         rows: this.rows, won: this.won, gameOver: this.gameOver,
-        message: this.message, target: this.target
+        message: this.message, target: this.target, currentInput: this.currentInput,
+        currentFeedback: this.currentFeedback
       }));
     } catch {
       this.message = 'Game progress could not be saved on this device.';

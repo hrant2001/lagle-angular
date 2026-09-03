@@ -93,6 +93,23 @@ h1 {
   margin-bottom: 10px;
 }
 
+.guess-input-row {
+  display: flex;
+  gap: 6px;
+  outline: none;
+}
+
+.input-cell {
+  padding: 0;
+  border-color: #878a8c;
+  background: white;
+  color: #333;
+}
+
+.input-cell:hover {
+  background: white;
+}
+
 input {
   padding: 8px;
   font-size: 1rem;
