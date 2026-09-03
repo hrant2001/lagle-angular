@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, ElementRef, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { getWordOfDay, verifyGuess } from './word-list';
@@ -98,6 +98,8 @@ const STATUS_RANK: Record<LetterState, number> = {
   styleUrl: './app.component.css',
 })
 export class AppComponent {
+  @ViewChild('guessInput') private guessInput?: ElementRef<HTMLInputElement>;
+
   readonly maxGuesses = 8;
 
   readonly keyboardRows: string[][] = [
@@ -211,6 +213,7 @@ export class AppComponent {
     if (guess.length !== 5) {
       this.message = 'Guess must be 5 letters.';
       this.messageType = 'error';
+      this.focusInput();
       return;
     }
 
@@ -222,12 +225,14 @@ export class AppComponent {
       this.message = 'Unable to verify that guess. Please try again.';
       this.messageType = 'error';
       this.isSubmitting = false;
+      this.focusInput();
       return;
     }
     if (!verification.is_word_in_list) {
       this.message = `"${guess}" isn't in the word list.`;
       this.messageType = 'error';
       this.isSubmitting = false;
+      this.focusInput();
       return;
     }
 
@@ -277,6 +282,13 @@ export class AppComponent {
     this.currentInput = '';
     this.saveGameState();
     this.isSubmitting = false;
+    this.focusInput();
+  }
+
+  private focusInput(): void {
+    if (!this.gameOver) {
+      setTimeout(() => this.guessInput?.nativeElement.focus());
+    }
   }
 
   private saveGameState(): void {

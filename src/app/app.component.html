@@ -28,6 +28,7 @@
   <div class="input-area" *ngIf="!gameOver">
     <label class="visually-hidden" for="guess-input">Enter a five-letter guess</label>
     <input
+      #guessInput
       id="guess-input"
       type="text"
       [ngModel]="currentInput"
