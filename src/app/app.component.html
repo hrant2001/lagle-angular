@@ -7,12 +7,18 @@
     </p>
   </header>
 
-  <div class="board">
+  <p class="game-message" role="status" aria-live="polite" *ngIf="isLoading">
+    Loading today's word...
+  </p>
+
+  <div class="board" role="grid" aria-label="Guess board">
     <div class="row" *ngFor="let row of rows">
       <div
         class="tile"
         *ngFor="let letter of row.word.split(''); let j = index"
         [ngClass]="row.feedback ? row.feedback[j] : 'pending'"
+        role="gridcell"
+        [attr.aria-label]="tileLabel(letter, row.feedback ? row.feedback[j] : null)"
       >
         {{ letter }}
       </div>
@@ -24,30 +30,47 @@
   </div>
 
   <div class="input-area" *ngIf="!gameOver">
+    <label class="visually-hidden" for="guess-input">Enter a five-letter guess</label>
     <input
+      id="guess-input"
       type="text"
       [ngModel]="currentInput"
       (ngModelChange)="onInputChange($event)"
       (keyup.enter)="submitGuess()"
       maxlength="5"
       placeholder="5-letter word"
-      inputmode="none"
+      inputmode="text"
+      autocomplete="off"
+      aria-describedby="game-message"
+      [disabled]="isLoading || isSubmitting"
       autofocus
     />
-    <button (click)="submitGuess()">Guess</button>
+    <button type="button" (click)="submitGuess()" [disabled]="isSubmitting">
+      {{ isSubmitting ? 'Checking...' : 'Guess' }}
+    </button>
   </div>
 
-  <p class="errorMessage" *ngIf="message && !isCorrect">{{ message }}</p>
-
-  <p class="correctMessage" *ngIf="message && isCorrect">{{ message }}</p>
+  <p
+    id="game-message"
+    class="game-message"
+    [class.errorMessage]="messageType === 'error'"
+    [class.correctMessage]="messageType === 'success'"
+    [attr.role]="messageType === 'error' ? 'alert' : 'status'"
+    aria-live="polite"
+    *ngIf="message">
+    {{ message }}
+  </p>
 
   <div class="keyboard">
     <div class="keyboard-row" *ngFor="let keyRow of keyboardRows">
       <button
         *ngFor="let key of keyRow"
         class="key"
+        type="button"
         [class.wide]="key === 'ENTER' || key === 'BACK'"
         [ngClass]="keyStatus[key]"
+        [disabled]="isSubmitting || gameOver"
+        [attr.aria-label]="key === 'BACK' ? 'Backspace' : key === 'ENTER' ? 'Submit guess' : key"
         (click)="onKeyClick(key)">
       {{ key === 'BACK' ? '⌫' : key }}
       </button>

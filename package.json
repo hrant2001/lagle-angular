@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "scripts": {
     "start": "ng serve",
-    "build": "ng build"
+    "build": "ng build",
+    "test": "vitest run"
   },
   "private": true,
   "dependencies": {
@@ -23,6 +24,7 @@
     "@angular-devkit/build-angular": "^17.3.0",
     "@angular/cli": "^17.3.0",
     "@angular/compiler-cli": "^17.3.0",
-    "typescript": "~5.4.0"
+    "typescript": "~5.4.0",
+    "vitest": "^4.1.11"
   }
 }

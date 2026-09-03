@@ -1,7 +1,7 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { WORD_LIST, getValidWords } from './word-list';
+import { getWordOfDay, verifyGuess } from './word-list';
 
 type LetterState = 'correct' | 'present' | 'absent';
 
@@ -9,6 +9,78 @@ interface GuessRow {
   word: string;
   // null = feedback not revealed yet (this is the one-turn-delay twist)
   feedback: LetterState[] | null;
+  pendingFeedback?: LetterState[];
+}
+
+export function computeFeedback(guess: string, target: string): LetterState[] {
+  const result: LetterState[] = new Array(5).fill('absent');
+  const targetLetters = target.split('');
+  const guessLetters = guess.split('');
+  const used = new Array(5).fill(false);
+
+  for (let i = 0; i < 5; i++) {
+    if (guessLetters[i] === targetLetters[i]) {
+      result[i] = 'correct';
+      used[i] = true;
+    }
+  }
+
+  for (let i = 0; i < 5; i++) {
+    if (result[i] === 'correct') continue;
+    const index = targetLetters.findIndex(
+      (letter, j) => letter === guessLetters[i] && !used[j]
+    );
+    if (index !== -1) {
+      result[i] = 'present';
+      used[index] = true;
+    }
+  }
+
+  return result;
+}
+
+function feedbackFromCharacterInfo(
+  characterInfo: Array<{ scoring: { in_word: boolean; correct_idx: boolean } }> | undefined
+): LetterState[] | null {
+  if (!characterInfo || characterInfo.length !== 5) return null;
+  return characterInfo.map(({ scoring }) =>
+    scoring.correct_idx ? 'correct' : scoring.in_word ? 'present' : 'absent'
+  );
+}
+
+function isValidFeedback(value: unknown): value is LetterState[] | null {
+  return value === null || (
+    Array.isArray(value) &&
+    value.length === 5 &&
+    value.every((state) => state === 'correct' || state === 'present' || state === 'absent')
+  );
+}
+
+export function isSavedGameState(value: unknown): value is {
+  rows: GuessRow[];
+  won: boolean;
+  gameOver: boolean;
+  message: string;
+  target: string;
+} {
+  if (!value || typeof value !== 'object') return false;
+  const state = value as Record<string, unknown>;
+  return Array.isArray(state['rows']) &&
+    state['rows'].length <= 8 &&
+    state['rows'].every((row) => {
+      if (!row || typeof row !== 'object') return false;
+      const candidate = row as Record<string, unknown>;
+      return typeof candidate['word'] === 'string' &&
+        /^[A-Z]{5}$/.test(candidate['word']) &&
+        isValidFeedback(candidate['feedback']) &&
+        (candidate['pendingFeedback'] === undefined || isValidFeedback(candidate['pendingFeedback']));
+    }) &&
+    typeof state['won'] === 'boolean' &&
+    typeof state['gameOver'] === 'boolean' &&
+    typeof state['message'] === 'string' &&
+    typeof state['target'] === 'string' &&
+    /^[A-Z]{5}$/.test(state['target']) &&
+    /^[A-Z]{5}$/.test(state['target']);
 }
 
 // Ranks how "good" a status is, so a key already marked correct
@@ -39,9 +111,12 @@ export class AppComponent {
   currentInput = '';
   rows: GuessRow[] = [];
   message = '';
+  messageType: 'error' | 'info' | 'success' = 'info';
   gameOver = false;
   won = false;
   isCorrect = false;
+  isSubmitting = false;
+  isLoading = true;
 
   // Best known status per letter, only updated once a guess is revealed.
   keyStatus: Record<string, LetterState> = {};
@@ -50,49 +125,58 @@ export class AppComponent {
     this.newGame();
   }
 
-  newGame(): void {
-    const lastPlayed = localStorage.getItem('LAGLE_LAST_PLAYED_DATE');
+  async newGame(): Promise<void> {
+    this.isLoading = true;
+    const storage = this.getStorage();
+    const lastPlayed = storage?.getItem('LAGLE_LAST_PLAYED_DATE');
     const today = new Date().toISOString().slice(0, 10);
-    
+
     if (lastPlayed === today) {
-      const savedState = localStorage.getItem('LAGLE_GAME_STATE');
+      const savedState = storage?.getItem('LAGLE_GAME_STATE');
       if (savedState) {
-        const { rows, won, gameOver, message, target } = JSON.parse(savedState);
-        this.rows = rows;
-        this.won = won;
-        this.gameOver = gameOver;
-        this.message = message;
-        this.target = target;
-        this.isCorrect = won;
-        this.currentInput = '';
-        this.keyStatus = {}; // Recompute keyboard status from rows
-        this.rows.forEach(row => {
-          if (row.feedback) this.updateKeyStatus(row.word, row.feedback);
-        });
-        return;
+        try {
+          const parsedState: unknown = JSON.parse(savedState);
+          if (isSavedGameState(parsedState)) {
+            this.rows = parsedState.rows;
+            this.won = parsedState.won;
+            this.gameOver = parsedState.gameOver;
+            this.message = parsedState.message;
+            this.messageType = parsedState.won ? 'success' : parsedState.gameOver ? 'error' : 'info';
+            this.target = parsedState.target;
+            this.isCorrect = this.won;
+            this.currentInput = '';
+            this.keyStatus = {};
+            this.rows.forEach((row) => {
+              if (row.feedback) this.updateKeyStatus(row.word, row.feedback);
+            });
+            this.isLoading = false;
+            return;
+          }
+          storage?.removeItem('LAGLE_GAME_STATE');
+        } catch {
+          storage?.removeItem('LAGLE_GAME_STATE');
+        }
       }
     }
 
-    const START_DATE = Date.UTC(2026, 0, 1);
-    const now = Date.now();
-    const todayUTC = Date.UTC(
-      new Date(now).getUTCFullYear(),
-      new Date(now).getUTCMonth(),
-      new Date(now).getUTCDate()
-    );
-
-    const diffDays = Math.floor((todayUTC - START_DATE) / (1000 * 60 * 60 * 24));
-    const index = diffDays % WORD_LIST.length;
-
-    this.target = WORD_LIST[index].toUpperCase();
-    // console.log('Target word:', this.target);
+    try {
+      this.target = await getWordOfDay();
+    } catch {
+      this.target = '';
+      this.message = 'Unable to load today\'s word. Please refresh and try again.';
+      this.messageType = 'error';
+    }
     this.currentInput = '';
     this.rows = [];
-    this.message = '';
+    if (this.messageType !== 'error') {
+      this.message = '';
+      this.messageType = 'info';
+    }
     this.gameOver = false;
     this.won = false;
     this.isCorrect = false;
     this.keyStatus = {};
+    this.isLoading = false;
   }
 
   onInputChange(value: string): void {
@@ -104,7 +188,7 @@ export class AppComponent {
 
   // Wired up to the on-screen keyboard buttons.
   onKeyClick(key: string): void {
-    if (this.gameOver) {
+    if (this.gameOver || this.isSubmitting) {
       return;
     }
     if (key === 'ENTER') {
@@ -121,7 +205,7 @@ export class AppComponent {
   }
 
   async submitGuess(): Promise<void> {
-    if (this.gameOver) {
+    if (this.gameOver || this.isSubmitting || this.isLoading || !this.target) {
       return;
     }
 
@@ -129,32 +213,46 @@ export class AppComponent {
 
     if (guess.length !== 5) {
       this.message = 'Guess must be 5 letters.';
+      this.messageType = 'error';
       return;
     }
 
-    const validWords = await getValidWords();
-    if (!validWords.includes(guess.toLowerCase())) {
+    this.isSubmitting = true;
+    let verification;
+    try {
+      verification = await verifyGuess(guess);
+    } catch {
+      this.message = 'Unable to verify that guess. Please try again.';
+      this.messageType = 'error';
+      this.isSubmitting = false;
+      return;
+    }
+    if (!verification.is_word_in_list) {
       this.message = `"${guess}" isn't in the word list.`;
+      this.messageType = 'error';
+      this.isSubmitting = false;
       return;
     }
 
     this.message = '';
+    this.messageType = 'info';
 
     // THE TWIST: reveal feedback for the PREVIOUS guess now, not this one.
     if (this.rows.length > 0) {
       const prevRow = this.rows[this.rows.length - 1];
       if (prevRow.feedback === null) {
-        prevRow.feedback = this.computeFeedback(prevRow.word);
+        prevRow.feedback = prevRow.pendingFeedback || this.computeFeedback(prevRow.word);
         this.updateKeyStatus(prevRow.word, prevRow.feedback);
       }
     }
 
-    this.isCorrect = guess === this.target;
+    this.isCorrect = verification.is_correct;
 
     // A correct guess still confirms itself immediately -
     // otherwise you'd never know you'd actually won.
-    const feedback = this.isCorrect ? this.computeFeedback(guess) : null;
-    this.rows.push({ word: guess, feedback });
+    const apiFeedback = feedbackFromCharacterInfo(verification.character_info);
+    const feedback = this.isCorrect ? (apiFeedback || this.computeFeedback(guess)) : null;
+    this.rows.push({ word: guess, feedback, pendingFeedback: apiFeedback || undefined });
     if (feedback) {
       this.updateKeyStatus(guess, feedback);
     }
@@ -163,29 +261,35 @@ export class AppComponent {
       this.gameOver = true;
       this.won = true;
       this.message = `You got it! The word was ${this.target}.`;
-      this.saveGameState();
+      this.messageType = 'success';
     } else if (this.rows.length >= this.maxGuesses) {
       // Game's over either way, so reveal the final pending guess too.
       const lastRow = this.rows[this.rows.length - 1];
-      lastRow.feedback = this.computeFeedback(lastRow.word);
+      lastRow.feedback = lastRow.pendingFeedback || this.computeFeedback(lastRow.word);
       this.updateKeyStatus(lastRow.word, lastRow.feedback);
       this.gameOver = true;
       this.message = `Out of guesses. The word was ${this.target}.`;
-      this.saveGameState();
+      this.messageType = 'error';
     }
 
     this.currentInput = '';
+    this.saveGameState();
+    this.isSubmitting = false;
   }
 
   private saveGameState(): void {
-    localStorage.setItem('LAGLE_LAST_PLAYED_DATE', new Date().toISOString().slice(0, 10));
-    localStorage.setItem('LAGLE_GAME_STATE', JSON.stringify({
-      rows: this.rows,
-      won: this.won,
-      gameOver: this.gameOver,
-      message: this.message,
-      target: this.target
-    }));
+    const storage = this.getStorage();
+    if (!storage) return;
+    try {
+      storage.setItem('LAGLE_LAST_PLAYED_DATE', new Date().toISOString().slice(0, 10));
+      storage.setItem('LAGLE_GAME_STATE', JSON.stringify({
+        rows: this.rows, won: this.won, gameOver: this.gameOver,
+        message: this.message, target: this.target
+      }));
+    } catch {
+      this.message = 'Game progress could not be saved on this device.';
+      this.messageType = 'error';
+    }
   }
 
   private updateKeyStatus(word: string, feedback: LetterState[]): void {
@@ -199,33 +303,19 @@ export class AppComponent {
   }
 
   private computeFeedback(guess: string): LetterState[] {
-    const result: LetterState[] = new Array(5).fill('absent');
-    const targetLetters = this.target.split('');
-    const guessLetters = guess.split('');
-    const used = new Array(5).fill(false);
+    return computeFeedback(guess, this.target);
+  }
 
-    // First pass: exact position matches
-    for (let i = 0; i < 5; i++) {
-      if (guessLetters[i] === targetLetters[i]) {
-        result[i] = 'correct';
-        used[i] = true;
-      }
+  private getStorage(): Storage | null {
+    try {
+      return typeof localStorage === 'undefined' ? null : localStorage;
+    } catch {
+      return null;
     }
+  }
 
-    // Second pass: right letter, wrong position
-    for (let i = 0; i < 5; i++) {
-      if (result[i] === 'correct') {
-        continue;
-      }
-      const idx = targetLetters.findIndex(
-        (letter, j) => letter === guessLetters[i] && !used[j]
-      );
-      if (idx !== -1) {
-        result[i] = 'present';
-        used[idx] = true;
-      }
-    }
-
-    return result;
+  tileLabel(letter: string, state: LetterState | null): string {
+    const status = state ? `, ${state}` : ', feedback pending';
+    return `${letter}${status}`;
   }
 }

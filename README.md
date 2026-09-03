@@ -12,9 +12,18 @@ npm start
 
 Then open http://localhost:4200
 
+Run the unit tests with:
+
+```bash
+npm test
+```
+
 ## How it works
 
-- Every guess must be a real 5-letter word from `src/app/word-list.ts`.
+- The word of the day is loaded from `GET https://wordle-api-kappa.vercel.app/answer`.
+- Guesses are verified with `POST https://wordle-api-kappa.vercel.app/{guess}`
+  without a request body. The API response supplies validity, correctness, and
+  per-character scoring.
 - After you submit a guess, the colored feedback (green/yellow/gray, same
   rules as Wordle) for your **previous** guess appears — not your current one.
 - Your most recent guess always shows as "pending" (no color) until your
@@ -23,11 +32,13 @@ Then open http://localhost:4200
   lag).
 - If you guess correctly, that guess is confirmed immediately so you know
   you've won.
+- Completed and in-progress daily games are saved locally and restored on
+  refresh.
 
 ## Files
 
 - `src/app/app.component.ts` — game state and the delayed-feedback logic
 - `src/app/app.component.html` — board and input UI
 - `src/app/app.component.css` — styling
-- `src/app/word-list.ts` — target/guess word list (swap in your own list
-  or a bigger dictionary anytime)
+- `src/app/word-list.ts` — API client for the answer and guess endpoints
+- `src/app/app.component.spec.ts` — unit tests for game rules and persistence
